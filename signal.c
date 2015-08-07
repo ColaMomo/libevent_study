@@ -90,6 +90,7 @@
 static int evsig_add(struct event_base *, evutil_socket_t, short, short, void *);
 static int evsig_del(struct event_base *, evutil_socket_t, short, short, void *);
 
+//专门用于信号处理的IO复用结构体变量
 static const struct eventop evsigops = {
 	"signal",
 	NULL,
@@ -125,6 +126,7 @@ evsig_set_base(struct event_base *base)
 	EVSIGBASE_UNLOCK();
 }
 
+//信号事件处理函数，当向写socket中写入数据时触发事件时回调
 /* Callback for when the signal handler write a byte to our signaling socket */
 static void
 evsig_cb(evutil_socket_t fd, short what, void *arg)
@@ -140,6 +142,7 @@ evsig_cb(evutil_socket_t fd, short what, void *arg)
 	memset(&ncaught, 0, sizeof(ncaught));
 
 	while (1) {
+		//从socket中读数据
 		n = recv(fd, signals, sizeof(signals), 0);
 		if (n == -1) {
 			int err = evutil_socket_geterror(fd);
@@ -150,6 +153,7 @@ evsig_cb(evutil_socket_t fd, short what, void *arg)
 			/* XXX warn? */
 			break;
 		}
+		//统计对应信号的触发次数
 		for (i = 0; i < n; ++i) {
 			ev_uint8_t sig = signals[i];
 			if (sig < NSIG)
@@ -160,11 +164,14 @@ evsig_cb(evutil_socket_t fd, short what, void *arg)
 	EVBASE_ACQUIRE_LOCK(base, th_base_lock);
 	for (i = 0; i < NSIG; ++i) {
 		if (ncaught[i])
+			//激活对应的信号
 			evmap_signal_active(base, i, ncaught[i]);
 	}
 	EVBASE_RELEASE_LOCK(base, th_base_lock);
 }
 
+//初始化evsig
+//创建socketpair，并将读socket与ev_signal关联
 int
 evsig_init(struct event_base *base)
 {
@@ -178,6 +185,7 @@ evsig_init(struct event_base *base)
 	 * pair to wake up our event loop.  The event loop then scans for
 	 * signals that got delivered.
 	 */
+	//创建socketpair
 	if (evutil_socketpair(
 		    AF_UNIX, SOCK_STREAM, 0, base->sig.ev_signal_pair) == -1) {
 #ifdef WIN32
@@ -190,6 +198,7 @@ evsig_init(struct event_base *base)
 		return -1;
 	}
 
+	//子进程不能访问socketpair
 	evutil_make_socket_closeonexec(base->sig.ev_signal_pair[0]);
 	evutil_make_socket_closeonexec(base->sig.ev_signal_pair[1]);
 	base->sig.sh_old = NULL;
@@ -198,17 +207,23 @@ evsig_init(struct event_base *base)
 	evutil_make_socket_nonblocking(base->sig.ev_signal_pair[0]);
 	evutil_make_socket_nonblocking(base->sig.ev_signal_pair[1]);
 
+	//将ev_signal_pair[1]（读socket）与ev_signal事件关联
+	//在Signal的处理函数中可以采用ev_signal_pair[0]发送数据，触发ev_signal_pair[1]的读事件，函数evsig_cb中完成读操作
 	event_assign(&base->sig.ev_signal, base, base->sig.ev_signal_pair[1],
 		EV_READ | EV_PERSIST, evsig_cb, base);
 
+	//标明是内部使用的
 	base->sig.ev_signal.ev_flags |= EVLIST_INTERNAL;
+	//设置信号事件的优先级为最高优先级
 	event_priority_set(&base->sig.ev_signal, 0);
 
+	//信号发生时应该处理的操作结构体eventop
 	base->evsigsel = &evsigops;
 
 	return 0;
 }
 
+//设置libevent内部的信号处理函数
 /* Helper: set the signal handler for evsignal to handler in base, so that
  * we can restore the original handler when we clear the current one. */
 int
@@ -258,6 +273,7 @@ _evsig_set_handler(struct event_base *base,
 	sa.sa_flags |= SA_RESTART;
 	sigfillset(&sa.sa_mask);
 
+	//设置信号处理函数
 	if (sigaction(evsignal, &sa, sig->sh_old[evsignal]) == -1) {
 		event_warn("sigaction");
 		mm_free(sig->sh_old[evsignal]);
@@ -265,18 +281,21 @@ _evsig_set_handler(struct event_base *base,
 		return (-1);
 	}
 #else
+	//设置信号处理函数
 	if ((sh = signal(evsignal, handler)) == SIG_ERR) {
 		event_warn("signal");
 		mm_free(sig->sh_old[evsignal]);
 		sig->sh_old[evsignal] = NULL;
 		return (-1);
 	}
+	//保存之前用户设置的信号处理函数，当event_del这个信号监听后，就可以恢复了
 	*sig->sh_old[evsignal] = sh;
 #endif
 
 	return (0);
 }
 
+//添加信号事件
 static int
 evsig_add(struct event_base *base, evutil_socket_t evsignal, short old, short events, void *p)
 {
@@ -287,6 +306,7 @@ evsig_add(struct event_base *base, evutil_socket_t evsignal, short old, short ev
 
 	/* catch signals if they happen quickly */
 	EVSIGBASE_LOCK();
+	//如果有多个event_base,那么只有一个event_base能够负责信号处理
 	if (evsig_base != base && evsig_base_n_signals_added) {
 		event_warnx("Added a signal to event base %p with signals "
 		    "already added to event_base %p.  Only one can have "
@@ -298,15 +318,16 @@ evsig_add(struct event_base *base, evutil_socket_t evsignal, short old, short ev
 	}
 	evsig_base = base;
 	evsig_base_n_signals_added = ++sig->ev_n_signals_added;
-	evsig_base_fd = base->sig.ev_signal_pair[0];
+	evsig_base_fd = base->sig.ev_signal_pair[0]; //写socket
 	EVSIGBASE_UNLOCK();
 
 	event_debug(("%s: %d: changing signal handler", __func__, (int)evsignal));
+	//设置libevent的信号处理函数
 	if (_evsig_set_handler(base, (int)evsignal, evsig_handler) == -1) {
 		goto err;
 	}
 
-
+	//如果信号之前没有注册到event_base中，则需要先将ev_signal注册到event_base中
 	if (!sig->ev_signal_added) {
 		if (event_add(&sig->ev_signal, NULL))
 			goto err;
@@ -369,6 +390,9 @@ evsig_del(struct event_base *base, evutil_socket_t evsignal, short old, short ev
 	return (_evsig_restore_handler(base, (int)evsignal));
 }
 
+//信号处理函数
+//当一个信号被触发时, evsig_handler被调用, 
+//该函数只是往 base->pipe_pair 写端 fd 写一个字节(实际是signo发生几次写几个字节), 字节内容就是signo
 static void __cdecl
 evsig_handler(int sig)
 {

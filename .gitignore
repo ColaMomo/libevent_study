@@ -5,6 +5,7 @@
 .#*
 *~
 *.swp
+*.bak
 
 # C stuff
 *.o

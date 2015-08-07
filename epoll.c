@@ -138,6 +138,7 @@ epoll_init(struct event_base *base)
 		evutil_getenv("EVENT_EPOLL_USE_CHANGELIST") != NULL))
 		base->evsel = &epollops_changelist;
 
+	//初始化信号evsig
 	evsig_init(base);
 
 	return (epollop);
@@ -379,6 +380,7 @@ epoll_nochangelist_del(struct event_base *base, evutil_socket_t fd,
 	return epoll_apply_one_change(base, base->evbase, &ch);
 }
 
+//后端epool的事件处理
 static int
 epoll_dispatch(struct event_base *base, struct timeval *tv)
 {
@@ -401,6 +403,7 @@ epoll_dispatch(struct event_base *base, struct timeval *tv)
 
 	EVBASE_RELEASE_LOCK(base, th_base_lock);
 
+	//等待IO事件的发生，返回有多少文件描述符可用
 	res = epoll_wait(epollop->epfd, events, epollop->nevents, timeout);
 
 	EVBASE_ACQUIRE_LOCK(base, th_base_lock);
@@ -433,6 +436,7 @@ epoll_dispatch(struct event_base *base, struct timeval *tv)
 		if (!ev)
 			continue;
 
+		//激活io事件
 		evmap_io_active(base, events[i].data.fd, ev | EV_ET);
 	}
 

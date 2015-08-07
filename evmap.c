@@ -410,10 +410,11 @@ evmap_signal_init(struct evmap_signal *entry)
 	TAILQ_INIT(&entry->events);
 }
 
-
+//将信号事件注册到event_base中
 int
 evmap_signal_add(struct event_base *base, int sig, struct event *ev)
 {
+	//这里使用的后端服务为信号事件专用的evsigsel
 	const struct eventop *evsel = base->evsigsel;
 	struct event_signal_map *map = &base->sigmap;
 	struct evmap_signal *ctx = NULL;
@@ -427,6 +428,7 @@ evmap_signal_add(struct event_base *base, int sig, struct event *ev)
 	    base->evsigsel->fdinfo_len);
 
 	if (TAILQ_EMPTY(&ctx->events)) {
+		//实际调用的是evsel_add函数
 		if (evsel->add(base, ev->ev_fd, 0, EV_SIGNAL, NULL)
 		    == -1)
 			return (-1);
@@ -459,6 +461,9 @@ evmap_signal_del(struct event_base *base, int sig, struct event *ev)
 	return (1);
 }
 
+//激活信号事件
+//sig: 信号值
+//ncalls: 信号发生的次数
 void
 evmap_signal_active(struct event_base *base, evutil_socket_t sig, int ncalls)
 {

@@ -55,6 +55,8 @@ extern "C" {
 #define EV_CLOSURE_SIGNAL 1
 #define EV_CLOSURE_PERSIST 2
 
+//定义了libevent框架的底层实现
+//其成员是一系列函数指针
 /** Structure to define the backend of a given event_base. */
 struct eventop {
 	/** The name of this backend. */
@@ -64,7 +66,7 @@ struct eventop {
 	 * run the backend, and return it.  The returned pointer will get
 	 * stored by event_init into the event_base.evbase field.  On failure,
 	 * this function should return NULL. */
-	void *(*init)(struct event_base *);
+	void *(*init)(struct event_base *);  //初始化事件
 	/** Enable reading/writing on a given fd or signal.  'events' will be
 	 * the events that we're trying to enable: one or more of EV_READ,
 	 * EV_WRITE, EV_SIGNAL, and EV_ET.  'old' will be those events that
@@ -73,17 +75,17 @@ struct eventop {
 	 * fdinfo field below.  It will be set to 0 the first time the fd is
 	 * added.  The function should return 0 on success and -1 on error.
 	 */
-	int (*add)(struct event_base *, evutil_socket_t fd, short old, short events, void *fdinfo);
+	int (*add)(struct event_base *, evutil_socket_t fd, short old, short events, void *fdinfo); //注册事件
 	/** As "add", except 'events' contains the events we mean to disable. */
-	int (*del)(struct event_base *, evutil_socket_t fd, short old, short events, void *fdinfo);
-	/** Function to implement the core of an event loop.  It must see which
+	int (*del)(struct event_base *, evutil_socket_t fd, short old, short events, void *fdinfo); //删除事件
+	/** Function to implement the core of an event loop.  It must see which 
 	    added events are ready, and cause event_active to be called for each
 	    active event (usually via event_io_active or such).  It should
 	    return 0 on success and -1 on error.
 	 */
-	int (*dispatch)(struct event_base *, struct timeval *);
+	int (*dispatch)(struct event_base *, struct timeval *);  //事件分发
 	/** Function to clean up and free our data from the event_base. */
-	void (*dealloc)(struct event_base *);
+	void (*dealloc)(struct event_base *);  //注销、释放资源
 	/** Flag: set if we need to reinitialize the event base after we fork.
 	 */
 	int need_reinit;
@@ -163,54 +165,56 @@ extern int _event_debug_mode_on;
 #define EVENT_DEBUG_MODE_IS_ON() (0)
 #endif
 
+
+//libevent的reator框架组件
 struct event_base {
 	/** Function pointers and other data to describe this event_base's
 	 * backend. */
-	const struct eventop *evsel;
+	const struct eventop *evsel;  //指向全局变量static const struct eventop * eventops[]中的一个，对应着底层的io多路复用技术
 	/** Pointer to backend-specific data. */
-	void *evbase;
+	void *evbase;  //eventop的实例对象
 
 	/** List of changes to tell backend about at next dispatch.  Only used
 	 * by the O(1) backends. */
-	struct event_changelist changelist;
+	struct event_changelist changelist;  //用于告知后端下一次执行事件分发时需要注意的事件列表
 
 	/** Function pointers used to describe the backend that this event_base
 	 * uses for signals */
-	const struct eventop *evsigsel;
+	const struct eventop *evsigsel;  //专门用于处理信号事件的eventop
 	/** Data to implement the common signal handelr code. */
-	struct evsig_info sig;
+	struct evsig_info sig;  //存储信号处理的信息
 
 	/** Number of virtual events */
-	int virtual_event_count;
+	int virtual_event_count;  //虚拟事件的个数
 	/** Number of total events added to this event_base */
-	int event_count;
+	int event_count;  //总事件的个数
 	/** Number of total events active in this event_base */
-	int event_count_active;
+	int event_count_active;  //就绪事件的个数
 
 	/** Set if we should terminate the loop once we're done processing
 	 * events. */
-	int event_gotterm;
+	int event_gotterm;  //处理完当前事件后退出
 	/** Set if we should terminate the loop immediately */
-	int event_break;
+	int event_break;  //立即退出
 
 	/** Set if we're running the event_base_loop function, to prevent
 	 * reentrant invocation. */
-	int running_loop;
+	int running_loop;  //立即启动一个新的事件循环
 
 	/* Active event management. */
 	/** An array of nactivequeues queues for active events (ones that
 	 * have triggered, and whose callbacks need to be called).  Low
 	 * priority numbers are more important, and stall higher ones.
 	 */
-	struct event_list *activequeues;
+	struct event_list *activequeues;  //就绪事件队列数组，数组的每个元素保存着一个特定优先级的就绪队列事件链表
 	/** The length of the activequeues array */
-	int nactivequeues;
+	int nactivequeues;    //就绪事件队列长度
 
 	/* common timeout logic */
 
 	/** An array of common_timeout_list* for all of the common timeout
 	 * values we know. */
-	struct common_timeout_list **common_timeout_queues;
+	struct common_timeout_list **common_timeout_queues;  //定时到期事件数组
 	/** The number of entries used in common_timeout_queues */
 	int n_common_timeouts;
 	/** The total size of common_timeout_queues. */
@@ -218,22 +222,22 @@ struct event_base {
 
 	/** List of defered_cb that are active.  We run these after the active
 	 * events. */
-	struct deferred_cb_queue defer_queue;
+	struct deferred_cb_queue defer_queue;  //要延迟处理的就绪事件队列
 
 	/** Mapping from file descriptors to enabled (added) events */
-	struct event_io_map io;
+	struct event_io_map io;   //io事件队列
 
 	/** Mapping from signal numbers to enabled (added) events. */
-	struct event_signal_map sigmap;
+	struct event_signal_map sigmap;  //信号事件队列
 
 	/** All events that have been enabled (added) in this event_base */
-	struct event_list eventqueue;
+	struct event_list eventqueue;  //链表，保存所有注册的事件
 
 	/** Stored timeval; used to detect when time is running backwards. */
-	struct timeval event_tv;
+	struct timeval event_tv;    
 
 	/** Priority queue of events with timeouts. */
-	struct min_heap timeheap;
+	struct min_heap timeheap;  //保存定时事件的小根堆
 
 	/** Stored timeval: used to avoid calling gettimeofday too often. */
 	struct timeval tv_cache;
@@ -281,14 +285,15 @@ struct event_config_entry {
 	const char *avoid_method;
 };
 
+//event_base的基本配置
 /** Internal structure: describes the configuration we want for an event_base
  * that we're about to allocate. */
 struct event_config {
-	TAILQ_HEAD(event_configq, event_config_entry) entries;
+	TAILQ_HEAD(event_configq, event_config_entry) entries; //队列，记录拒绝使用的后端IO多路复用函数
 
-	int n_cpus_hint;
-	enum event_method_feature require_features;
-	enum event_base_config_flag flags;
+	int n_cpus_hint;  //记录CPU的数量
+	enum event_method_feature require_features;  //记录所选后端需满足的特征
+	enum event_base_config_flag flags; //记录一些特性标签
 };
 
 /* Internal use only: Functions that might be missing from <sys/queue.h> */
