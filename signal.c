@@ -126,7 +126,9 @@ evsig_set_base(struct event_base *base)
 	EVSIGBASE_UNLOCK();
 }
 
-//信号事件处理函数，当向写socket中写入数据时触发事件时回调
+//libevent中将信号事件转化为io事件
+//当信号发生，触发信号处理函数，处理函数会向socket中写入一个字节（每个信号对应一个字节）
+//之后IO多路复用函数监听到可读，从而触发此回调函数
 /* Callback for when the signal handler write a byte to our signaling socket */
 static void
 evsig_cb(evutil_socket_t fd, short what, void *arg)
@@ -172,6 +174,7 @@ evsig_cb(evutil_socket_t fd, short what, void *arg)
 
 //初始化evsig
 //创建socketpair，并将读socket与ev_signal关联
+//在io多路复用如epoll_init中调用
 int
 evsig_init(struct event_base *base)
 {
@@ -223,9 +226,11 @@ evsig_init(struct event_base *base)
 	return 0;
 }
 
-//设置libevent内部的信号处理函数
+
 /* Helper: set the signal handler for evsignal to handler in base, so that
  * we can restore the original handler when we clear the current one. */
+//设置libevent内部的信号处理函数
+//evsignal是信号值，handler是处理函数
 int
 _evsig_set_handler(struct event_base *base,
     int evsignal, void (__cdecl *handler)(int))
@@ -242,6 +247,8 @@ _evsig_set_handler(struct event_base *base,
 	 * resize saved signal handler array up to the highest signal number.
 	 * a dynamic array is used to keep footprint on the low side.
 	 */
+	 //数组的一个元素存放一个信号，信号值等于其下标
+	 //信号值大于当前数组大小时，对数组进行扩容
 	if (evsignal >= sig->sh_old_max) {
 		int new_max = evsignal + 1;
 		event_debug(("%s: evsignal (%d) >= sh_old_max (%d), resizing",
@@ -282,6 +289,7 @@ _evsig_set_handler(struct event_base *base,
 	}
 #else
 	//设置信号处理函数
+	//signal()函数用于获取系统产生的各种信号，并对此信号调用用户自己定义的处理函数
 	if ((sh = signal(evsignal, handler)) == SIG_ERR) {
 		event_warn("signal");
 		mm_free(sig->sh_old[evsignal]);
@@ -322,12 +330,12 @@ evsig_add(struct event_base *base, evutil_socket_t evsignal, short old, short ev
 	EVSIGBASE_UNLOCK();
 
 	event_debug(("%s: %d: changing signal handler", __func__, (int)evsignal));
-	//设置libevent的信号处理函数
+	//设置libevent的信号抓捕函数
 	if (_evsig_set_handler(base, (int)evsignal, evsig_handler) == -1) {
 		goto err;
 	}
 
-	//如果信号之前没有注册到event_base中，则需要先将ev_signal注册到event_base中
+	//event_base第一次监听信号事件，需要先将ev_signal注册到event_base中
 	if (!sig->ev_signal_added) {
 		if (event_add(&sig->ev_signal, NULL))
 			goto err;

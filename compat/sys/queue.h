@@ -272,19 +272,27 @@ struct {								\
 /*
  * Tail queue definitions.
  */
+//==============================TAILQ定义============================
+//在lievent中使用较多的数据结构TAILQ
+//本质上是一个双向链表，由两个结构体TAILQ_HEAD, TAILQ_ENTRY共同定义
+//TAILQ_HEAD定义了队列头
+//TAILQ_ENTRY定义了队列中的元素
+
+//TAILQ_HEAD: 队列头
 #define TAILQ_HEAD(name, type)						\
 struct name {								\
-	struct type *tqh_first;	/* first element */			\
-	struct type **tqh_last;	/* addr of last next element */		\
+	struct type *tqh_first;	/* first element */			\  //指向队列头元素的指针
+	struct type **tqh_last;	/* addr of last next element */		\  //二级指针，指向队列最后一个元素的next指针的指针
 }
 
 #define TAILQ_HEAD_INITIALIZER(head)					\
 	{ NULL, &(head).tqh_first }
 
+//TAILQ_ENTRY: 队列元素
 #define TAILQ_ENTRY(type)						\
 struct {								\
-	struct type *tqe_next;	/* next element */			\
-	struct type **tqe_prev;	/* address of previous next element */	\
+	struct type *tqe_next;	/* next element */			\  //指向队列下一个元素的指针
+	struct type **tqe_prev;	/* address of previous next element */	\  //二级指针，指向队列中上一个元素的next指针的指针
 }
 
 /*
@@ -314,11 +322,13 @@ struct {								\
 /*
  * Tail queue functions.
  */
+ //初始化队列头
 #define	TAILQ_INIT(head) do {						\
 	(head)->tqh_first = NULL;					\
 	(head)->tqh_last = &(head)->tqh_first;				\
 } while (0)
 
+//将元素elm插入到队列头
 #define TAILQ_INSERT_HEAD(head, elm, field) do {			\
 	if (((elm)->field.tqe_next = (head)->tqh_first) != NULL)	\
 		(head)->tqh_first->field.tqe_prev =			\
@@ -329,6 +339,7 @@ struct {								\
 	(elm)->field.tqe_prev = &(head)->tqh_first;			\
 } while (0)
 
+//将元素elm插入到队列尾
 #define TAILQ_INSERT_TAIL(head, elm, field) do {			\
 	(elm)->field.tqe_next = NULL;					\
 	(elm)->field.tqe_prev = (head)->tqh_last;			\
@@ -336,6 +347,7 @@ struct {								\
 	(head)->tqh_last = &(elm)->field.tqe_next;			\
 } while (0)
 
+//将元素elm插入到队列元素listelm后面
 #define TAILQ_INSERT_AFTER(head, listelm, elm, field) do {		\
 	if (((elm)->field.tqe_next = (listelm)->field.tqe_next) != NULL)\
 		(elm)->field.tqe_next->field.tqe_prev =			\
@@ -346,6 +358,7 @@ struct {								\
 	(elm)->field.tqe_prev = &(listelm)->field.tqe_next;		\
 } while (0)
 
+//将元素elm插入到队列元素listelm前面
 #define	TAILQ_INSERT_BEFORE(listelm, elm, field) do {			\
 	(elm)->field.tqe_prev = (listelm)->field.tqe_prev;		\
 	(elm)->field.tqe_next = (listelm);				\

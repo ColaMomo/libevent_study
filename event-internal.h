@@ -110,6 +110,8 @@ struct eventop {
 
 /* #define HT_CACHE_HASH_VALS */
 
+//对于windows系统，使用hash表结构的event_io_map
+//对于非windows系统，使用数组结构的event_io_map，与event_signal_map结构相同
 #ifdef EVMAP_USE_HT
 #include "ht-internal.h"
 struct event_map_entry;
@@ -125,9 +127,13 @@ HT_HEAD(event_io_map, event_map_entry);
 struct event_signal_map {
 	/* An array of evmap_io * or of evmap_signal *; empty entries are
 	 * set to NULL. */
-	void **entries;
+	//数组，元素为evmap_io * 或 evmap_signal *
+	//同一个文件描述符fd或者信号值sig是可以多次调用event_new、event_add函数的
+	//这里把同一个fd或sig上注册的事件放在同一个队列evmap_io或evmap_signal中
+	//entries[x]保存的是fd为x或者sig为x的事件队列
+	void **entries;  
 	/* The number of entries available in entries */
-	int nentries;
+	int nentries;  //数组元素个数
 };
 
 /* A list of events waiting on a given 'common' timeout value.  Ordinarily,
@@ -170,7 +176,7 @@ extern int _event_debug_mode_on;
 struct event_base {
 	/** Function pointers and other data to describe this event_base's
 	 * backend. */
-	const struct eventop *evsel;  //指向全局变量static const struct eventop * eventops[]中的一个，对应着底层的io多路复用技术
+	const struct eventop *evsel;  //指向全局变量static const struct eventop * eventops[]中的一个，对应着底层的io多路复用实现
 	/** Pointer to backend-specific data. */
 	void *evbase;  //eventop的实例对象
 
@@ -193,9 +199,9 @@ struct event_base {
 
 	/** Set if we should terminate the loop once we're done processing
 	 * events. */
-	int event_gotterm;  //处理完当前事件后退出
+	int event_gotterm;  //事件循环退出标记，在处理完事件后退出
 	/** Set if we should terminate the loop immediately */
-	int event_break;  //立即退出
+	int event_break;  //事件循环退出标记，立即退出
 
 	/** Set if we're running the event_base_loop function, to prevent
 	 * reentrant invocation. */
@@ -234,13 +240,13 @@ struct event_base {
 	struct event_list eventqueue;  //链表，保存所有注册的事件
 
 	/** Stored timeval; used to detect when time is running backwards. */
-	struct timeval event_tv;    
+	struct timeval event_tv;    //保存后端dispatch()上次返回的时间
 
 	/** Priority queue of events with timeouts. */
 	struct min_heap timeheap;  //保存定时事件的小根堆
 
 	/** Stored timeval: used to avoid calling gettimeofday too often. */
-	struct timeval tv_cache;
+	struct timeval tv_cache;  //时间缓存，防止频繁的进行获取当前时间的系统调用
 
 #ifndef _EVENT_DISABLE_THREAD_SUPPORT
 	/* threading support */

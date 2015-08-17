@@ -85,13 +85,13 @@ struct event_base;
 
 //event: libevent的核心数据结构之一，代表一个事件对象
 struct event {
-	TAILQ_ENTRY(event) ev_active_next;  //就绪事件链表
-	TAILQ_ENTRY(event) ev_next;  //已注册的事件链表
+	TAILQ_ENTRY(event) ev_active_next;  //就绪事件链表节点
+	TAILQ_ENTRY(event) ev_next;  //已注册的事件链表节点
 	/* for managing timeouts */
 	union {
 		TAILQ_ENTRY(event) ev_next_with_common_timeout;
 		int min_heap_idx;  
-	} ev_timeout_pos;  //管理定时事件 (小根堆)
+	} ev_timeout_pos;  //管理定时事件 (小根堆节点)
 	evutil_socket_t ev_fd;  //事件源，文件描述符
 
 	struct event_base *ev_base;   //事件处理框架
@@ -101,7 +101,7 @@ struct event {
 		struct {
 			TAILQ_ENTRY(event) ev_io_next;
 			struct timeval ev_timeout;
-		} ev_io;   //管理io事件 (双向链表)
+		} ev_io;   //管理io事件 (io事件链表节点)
 
 		/* used by signal events */
 		struct {
@@ -109,13 +109,29 @@ struct event {
 			short ev_ncalls;
 			/* Allows deletes in callback */
 			short *ev_pncalls;
-		} ev_signal;  //管理信号事件 (双向链表)
+		} ev_signal;  //管理信号事件 (signal事件链表节点)
 	} _ev;
 
-	short ev_events; 
-	short ev_res;		/* result passed to event callback */ //记录当前激活事件的类型
-	short ev_flags;   //用于标记event信息的字段，标明当前时间的状态
+	//event事件类型，包括：
+	//1. I/O事件： EV_WRITE和EV_READ 
+	//2. 定时事件：EV_TIMEOUT
+	//3. 信号：    EV_SIGNAL 
+	short ev_events;   
+	//ev_res和ev_flags是事件激活后回调的结果
+	short ev_res;		/* result passed to event callback */ //记录了当前激活事件的类型,是读事件还是写事件等
+	//用于记录事件的状态，包括：
+	//#define EVLIST_TIMEOUT    0x01 
+	//#define EVLIST_INSERTED   0x02  事件已经插入到事件列表中。
+	//#define EVLIST_SIGNAL        0x04
+	//#define EVLIST_ACTIVE        0x08   事件处于激活状态
+	//#define EVLIST_INTERNAL  0x10  
+	//#define EVLIST_INIT      0x80  事件已经初始化
+	short ev_flags;   
 	ev_uint8_t ev_pri;	/* smaller numbers are higher priority */  //记录事件的优先级，数字越小，优先级越高
+	//记录事件的终止方式，根据ev_closure的值，当事件发生时，按相应策略执行回调函数
+	//#define EV_CLOSURE_NONE 0  （对应除了下面两个之外的其他事件类型）
+    //#define EV_CLOSURE_SIGNAL 1  （对应的事件类型：EV_SIGNAL）
+	//#define EV_CLOSURE_PERSIST 2 (对应的事件类型：EV_PERSIST)
 	ev_uint8_t ev_closure;
 	struct timeval ev_timeout;  //timeout事件的超时值
 
@@ -124,6 +140,7 @@ struct event {
 	void *ev_arg;     //回调函数的参数
 };
 
+//定义队列：event_list
 TAILQ_HEAD (event_list, event);
 
 #ifdef _EVENT_DEFINED_TQENTRY

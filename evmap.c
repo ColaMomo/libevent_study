@@ -54,14 +54,17 @@
 /** An entry for an evmap_io list: notes all the events that want to read or
 	write on a given fd, and the number of each.
   */
+//io事件队列
 struct evmap_io {
-	struct event_list events;
-	ev_uint16_t nread;
-	ev_uint16_t nwrite;
+	//event_list是队列TAILQ_HEAD的名称，定义见event_struct.h
+	struct event_list events;  
+	ev_uint16_t nread;   //读事件的数目
+	ev_uint16_t nwrite;  //写时间的数目
 };
 
 /* An entry for an evmap_signal list: notes all the events that want to know
    when a signal triggers. */
+//信号事件队列
 struct evmap_signal {
 	struct event_list events;
 };
@@ -160,6 +163,7 @@ void evmap_io_clear(struct event_io_map *ctx)
    by allocating enough memory for a 'struct type', and initializing the new
    value by calling the function 'ctor' on it.
  */
+ //获取sig=slot或者fd=slot的事件队列，结果保存在x中
 #define GET_SIGNAL_SLOT_AND_CTOR(x, map, slot, type, ctor, fdinfo_len)	\
 	do {								\
 		if ((map)->entries[slot] == NULL) {			\
@@ -256,6 +260,7 @@ evmap_io_init(struct evmap_io *entry)
 
 /* return -1 on error, 0 on success if nothing changed in the event backend,
  * and 1 on success if something did. */
+//将io事件注册到event_base中
 int
 evmap_io_add(struct event_base *base, evutil_socket_t fd, struct event *ev)
 {
@@ -272,11 +277,14 @@ evmap_io_add(struct event_base *base, evutil_socket_t fd, struct event *ev)
 		return 0;
 
 #ifndef EVMAP_USE_HT
+	//对于非windows系统，使用数组来存放evmap_io队列
 	if (fd >= io->nentries) {
+		//在使用数组来存放evmap_io时，如果fd>io->nentries，需要对数组进行扩容
 		if (evmap_make_space(io, fd, sizeof(struct evmap_io *)) == -1)
 			return (-1);
 	}
 #endif
+	//获取fd所对应的事件队列
 	GET_IO_SLOT_AND_CTOR(ctx, io, fd, evmap_io, evmap_io_init,
 						 evsel->fdinfo_len);
 
@@ -287,11 +295,13 @@ evmap_io_add(struct event_base *base, evutil_socket_t fd, struct event *ev)
 		old |= EV_READ;
 	if (nwrite)
 		old |= EV_WRITE;
-
+	
+	//如果事件包含读事件，则将读事件计数加1
 	if (ev->ev_events & EV_READ) {
 		if (++nread == 1)
 			res |= EV_READ;
 	}
+	//如果事件包含写事件，则将写事件计数加1
 	if (ev->ev_events & EV_WRITE) {
 		if (++nwrite == 1)
 			res |= EV_WRITE;
@@ -314,6 +324,7 @@ evmap_io_add(struct event_base *base, evutil_socket_t fd, struct event *ev)
 		/* XXX(niels): we cannot mix edge-triggered and
 		 * level-triggered, we should probably assert on
 		 * this. */
+		 //调用后端io多路复用服务添加事件
 		if (evsel->add(base, ev->ev_fd,
 			old, (ev->ev_events & EV_ET) | res, extra) == -1)
 			return (-1);
@@ -322,6 +333,7 @@ evmap_io_add(struct event_base *base, evutil_socket_t fd, struct event *ev)
 
 	ctx->nread = (ev_uint16_t) nread;
 	ctx->nwrite = (ev_uint16_t) nwrite;
+	//将事件ev插入到该fd所在的事件队列ctx->events中
 	TAILQ_INSERT_TAIL(&ctx->events, ev, ev_io_next);
 
 	return (retval);
@@ -383,6 +395,7 @@ evmap_io_del(struct event_base *base, evutil_socket_t fd, struct event *ev)
 	return (retval);
 }
 
+//激活io事件
 void
 evmap_io_active(struct event_base *base, evutil_socket_t fd, short events)
 {
@@ -393,9 +406,11 @@ evmap_io_active(struct event_base *base, evutil_socket_t fd, short events)
 #ifndef EVMAP_USE_HT
 	EVUTIL_ASSERT(fd < io->nentries);
 #endif
+	//获取该fd所对应的io事件队列
 	GET_IO_SLOT(ctx, io, fd, evmap_io);
 
 	EVUTIL_ASSERT(ctx);
+	//遍历队列，将发生的事件插入到激活队列中
 	TAILQ_FOREACH(ev, &ctx->events, ev_io_next) {
 		if (ev->ev_events & events)
 			event_active_nolock(ev, ev->ev_events & events, 1);
@@ -420,10 +435,12 @@ evmap_signal_add(struct event_base *base, int sig, struct event *ev)
 	struct evmap_signal *ctx = NULL;
 
 	if (sig >= map->nentries) {
+		//对数组进行扩容
 		if (evmap_make_space(
 			map, sig, sizeof(struct evmap_signal *)) == -1)
 			return (-1);
 	}
+	//找到sig所在的事件队列，保存在ctx中
 	GET_SIGNAL_SLOT_AND_CTOR(ctx, map, sig, evmap_signal, evmap_signal_init,
 	    base->evsigsel->fdinfo_len);
 
@@ -434,6 +451,7 @@ evmap_signal_add(struct event_base *base, int sig, struct event *ev)
 			return (-1);
 	}
 
+	//将事件插入到队列尾
 	TAILQ_INSERT_TAIL(&ctx->events, ev, ev_signal_next);
 
 	return (1);
@@ -472,8 +490,10 @@ evmap_signal_active(struct event_base *base, evutil_socket_t sig, int ncalls)
 	struct event *ev;
 
 	EVUTIL_ASSERT(sig < map->nentries);
+	//通过sig找到其对应的事件队列ctx
 	GET_SIGNAL_SLOT(ctx, map, sig, evmap_signal);
 
+	//遍历该sig值的信号事件队列，将事件插入到激活队列中
 	TAILQ_FOREACH(ev, &ctx->events, ev_signal_next)
 		event_active_nolock(ev, EV_SIGNAL, ncalls);
 }
