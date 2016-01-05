@@ -522,6 +522,7 @@ event_disable_debug_mode(void)
 #endif
 
 //创建event_base
+//初始化方法主要作两件事：1. 申请空间 2. 初始化event_base结构体中的成员
 struct event_base *
 event_base_new_with_config(const struct event_config *cfg)
 {
@@ -559,8 +560,8 @@ event_base_new_with_config(const struct event_config *cfg)
 	if (cfg)
 		base->flags = cfg->flags;
     
-	evmap_io_initmap(&base->io);
-	evmap_signal_initmap(&base->sigmap);
+	evmap_io_initmap(&base->io); //初始化event_io_map
+	evmap_signal_initmap(&base->sigmap); //初始化event_signal_map
 	event_changelist_init(&base->changelist);
 
 	base->evbase = NULL;

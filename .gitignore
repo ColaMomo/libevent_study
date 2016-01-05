@@ -92,3 +92,5 @@ libevent_openssl.pc
 /test/test-weof
 /test/test-changelist
 
+#anjuta
+*.anjuta*

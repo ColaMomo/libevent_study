@@ -27,7 +27,8 @@
 #ifndef _EVENT_H_
 #define _EVENT_H_
 
-/** @mainpage
+//Libevent的简要介绍
+/** @mainpage 
 
   @section intro Introduction
 
@@ -51,12 +52,28 @@
   multi-threaded applications; see Steven Grimm's explanation. Libevent should
   compile on Linux, *BSD, Mac OS X, Solaris and Windows.
 
+  libevent是用于开发可扩展的网络服务的基于事件通知的网络库。
+  libevnet API提供了一个机制，在文件描述符上的IO事件，信号事件或者超时事件发生时，
+  执行事件的回调函数。
+
+  libevent用于替代事件驱动的网络服务中的事件循环。应用只需要调用event_dispatch()
+  方法就可以在不需要改动事件循环的情形下自动的添加、删除事件。
+
+  目前，libevent支持如下IO多路复用机制：/dev/poll, kqueue, select, poll, epoll。
+  同时也支持实时信号。
+  内部的事件机制是对暴露的API的完整实现，libevent的更新升级不需要重新更改整个应用。
+  因此，libevent简化了应用开发，提供了可扩展的事件通知机制。
+  libevent也可以用于多线程应用。
+
   @section usage Standard usage
 
   Every program that uses libevent must include the <event.h> header, and pass
   the -levent flag to the linker.  Before using any of the functions in the
   library, you must call event_init() or event_base_new() to perform one-time
   initialization of the libevent library.
+
+  使用libevent的程序，需要引入<event.h>头文件，编译时加上参数-levent。
+  在使用前，需要调用event_init() 或 event_base_new()来初始化libevent库。
 
   @section event Event notification
 
@@ -66,6 +83,12 @@
   events by calling event_add().  The event structure must remain allocated as
   long as it is active, so it should be allocated on the heap. Finally, you
   call event_dispatch() to loop and dispatch events.
+
+  对于你想监控的每个文件描述符，你都需要声明一个event结构体，
+  再调用event_set()方法来初始化结构体的属性成员。
+  激活事件通知机制，需要调用event_add()方法把event结构体加入到监控事件列表中。
+  event结构体在堆内存中进行分配，只要事件在激活状态，就会一直保存在内存中。
+  最后，调用event_dispatch()方法来进入事件循环。
 
   @section bufferevent I/O Buffers
 

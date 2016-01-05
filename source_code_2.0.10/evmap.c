@@ -57,9 +57,9 @@
 //io事件队列
 struct evmap_io {
 	//event_list是队列TAILQ_HEAD的名称，定义见event_struct.h
-	struct event_list events;  
+	struct event_list events;
 	ev_uint16_t nread;   //读事件的数目
-	ev_uint16_t nwrite;  //写时间的数目
+	ev_uint16_t nwrite;  //写事件的数目
 };
 
 /* An entry for an evmap_signal list: notes all the events that want to know
